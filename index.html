@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>موقع التوصيل</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background-color: #f0f2f5;
+      color: #333;
+    }
+
+    .container {
+      background: white;
+      max-width: 420px;
+      margin: 60px auto;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+
+    h2 {
+      text-align: center;
+      color: #1d1d1f;
+      margin-bottom: 25px;
+    }
+
+    input, textarea, button {
+      width: 100%;
+      margin: 10px 0;
+      padding: 14px;
+      font-size: 16px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #007aff;
+      color: white;
+      border: none;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background-color: #005ecb;
+    }
+
+    #map {
+      margin-top: 20px;
+      height: 200px;
+      display: none;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    #qrcode {
+      text-align: center;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>طلب التوصيل</h2>
+    <input type="text" id="name" placeholder="الاسم الكامل">
+    <input type="text" id="phone" placeholder="رقم الهاتف">
+    <textarea id="order" placeholder="ما هي طلبيتك؟"></textarea>
+    <button onclick="sendData()">إرسال الطلب</button>
+    <div id="map"></div>
+    <div id="qrcode"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script>
+    async function sendData() {
+      const name = document.getElementById("name").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      const order = document.getElementById("order").value.trim();
+
+      if (!name || !phone || !order) {
+        alert("يرجى ملء جميع الحقول");
+        return;
+      }
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          const accuracy = position.coords.accuracy;
+
+          let sendLat = "", sendLon = "";
+          let mapUrl = "الموقع غير متوفر";
+
+          if (accuracy <= 30) {
+            sendLat = lat;
+            sendLon = lon;
+            mapUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+            document.getElementById("map").style.display = "block";
+            document.getElementById("map").innerHTML = `
+              <iframe width="100%" height="100%" frameborder="0"
+              src="https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed" allowfullscreen></iframe>
+            `;
+          }
+
+          // Google Sheets
+          fetch("https://script.google.com/macros/s/AKfycbwDmvfyI56uEqu-_qHCuZn8n47iP3pEK9M30vmz9BYt92_qub1ytbnghDMBEsEnjpzpBA/exec", {
+            method: "POST",
+            body: new URLSearchParams({ name, phone, order, lat: sendLat, lon: sendLon }),
+          });
+
+          // Telegram
+          fetch("https://api.telegram.org/bot7635616542:AAFr-_YSCrB_asM4-aWDehWEx3Yq-wmZvYY/sendMessage", {
+            method: "POST",
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: "6066052354",
+              text: `طلب جديد:\nالاسم: ${name}\n📞 الهاتف: ${phone}\n📦 الطلب: ${order}\n📍 الموقع: ${mapUrl}`
+            }),
+          });
+
+          // توليد QR
+          const qrText = `اسم: ${name}\nهاتف: ${phone}\nطلب: ${order}\nموقع: ${mapUrl}`;
+          QRCode.toCanvas(document.getElementById("qrcode"), qrText, { width: 200 });
+
+          alert("✅ تم إرسال الطلب بنجاح");
+
+        }, () => {
+          // بدون موقع
+          fetch("https://script.google.com/macros/s/AKfycbwDmvfyI56uEqu-_qHCuZn8n47iP3pEK9M30vmz9BYt92_qub1ytbnghDMBEsEnjpzpBA/exec", {
+            method: "POST",
+            body: new URLSearchParams({ name, phone, order, lat: "", lon: "" }),
+          });
+
+          fetch("https://api.telegram.org/bot7635616542:AAFr-_YSCrB_asM4-aWDehWEx3Yq-wmZvYY/sendMessage", {
+            method: "POST",
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: "6066052354",
+              text: `طلب جديد بدون موقع:\nالاسم: ${name}\n📞 الهاتف: ${phone}\n📦 الطلب: ${order}`
+            }),
+          });
+
+          alert("📍 فشل تحديد الموقع. تم إرسال الطلب بدون الموقع.");
+        });
+      } else {
+        alert("المتصفح لا يدعم GPS");
+      }
+    }
+  </script>
+
+</body>
+</html>
